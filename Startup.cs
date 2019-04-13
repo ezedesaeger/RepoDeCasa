@@ -9,12 +9,18 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Authorization;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Repositories;
+using System;
 using System.Linq;
+using System.Reflection;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using WebApp_OpenIDConnect_DotNet.Controllers;
+using WebApp_OpenIDConnect_DotNet.Extensions;
 
 namespace WebApp_OpenIDConnect_DotNet
 {
@@ -41,6 +47,16 @@ namespace WebApp_OpenIDConnect_DotNet
             services.AddAuthentication(AzureADDefaults.AuthenticationScheme)
                 .AddAzureAD(options => Configuration.Bind("AzureAd", options));
 
+            //Registering dependency injection
+            Assembly.Load(Assembly.GetExecutingAssembly().GetName().Name)
+              .GetTypes()
+              .Where(t => t.GetInterfaces().Any(i => i.Name == "I" + t.Name)).ToList()
+              .ForEach(t => services.AddTransient(t.GetInterface("I" + t.Name, false), t));
+
+            Assembly.Load("Repositories")
+              .GetTypes()
+              .Where(t => t.GetInterfaces().Any(i => i.Name == "I" + t.Name)).ToList()
+              .ForEach(t => services.AddTransient(t.GetInterface("I" + t.Name, false), t));
 
 
             services.Configure<OpenIdConnectOptions>(AzureADDefaults.OpenIdScheme, options =>
@@ -54,7 +70,7 @@ namespace WebApp_OpenIDConnect_DotNet
                     {
                         ClaimsIdentity claimsId = context.Principal.Identity as ClaimsIdentity;
 
-                        claimsId.AddClaim(new Claim("myclaim", "eze"));
+                        claimsId.AddClaims(services.BuildServiceProvider().GetRequiredService<Imyservice>().GetClaims());
 
                         return Task.FromResult(0);
                     }
@@ -71,22 +87,31 @@ namespace WebApp_OpenIDConnect_DotNet
                     .Build();
                 options.Filters.Add(new AuthorizeFilter(policy));
             })
-            .SetCompatibilityVersion(CompatibilityVersion.Version_2_1);
+            .SetCompatibilityVersion(CompatibilityVersion.Version_2_2);
+
+
+            // CONFIGURACION DE SQLITE IN-MEMORY
+            var connection = new SqliteConnection("DataSource=:memory:");
+            connection.Open();
+            services.AddDbContext<BaseRepoContext>(options =>
+                options.UseSqlite(connection));
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-        public void Configure(IApplicationBuilder app, IHostingEnvironment env)
+        public void Configure(IApplicationBuilder app, IHostingEnvironment env, IServiceProvider serviceProvider)
         {
             if (env.IsDevelopment())
             {
-                app.UseDeveloperExceptionPage();
+                //app.UseDeveloperExceptionPage();
             }
             else
             {
-                app.UseExceptionHandler("/Home/Error");
-                app.UseHsts();
+                //app.UseExceptionHandler("/Home/Error");
+                //app.UseHsts();
             }
 
+            var eze = serviceProvider.GetService<Imyservice>();
+            app.ConfigureExceptionHandler(eze);
             app.UseHttpsRedirection();
             app.UseStaticFiles();
             app.UseCookiePolicy();
