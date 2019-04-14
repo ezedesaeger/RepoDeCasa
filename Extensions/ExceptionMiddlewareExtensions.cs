@@ -36,7 +36,7 @@ namespace WebApp_OpenIDConnect_DotNet.Extensions
                         await context.Response.WriteAsync(JsonConvert.SerializeObject(new ProblemDetails()
                         {
                             Status = context.Response.StatusCode,
-                            Detail = "Internal Server Error."
+                            Detail = contextFeature.Error.Message
                         }));
                     }
                 });
